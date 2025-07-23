@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" class="transition duration-300">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="Angelo" content="width=device-width, initial-scale=1.0" />
+  <title>Bekeeh To-Do App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Enable Tailwind dark mode class support
+    tailwind.config = {
+      darkMode: 'class',
+    };
+  </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 min-h-screen transition duration-300">
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold text-center w-full">📅 Weekly To-Do (Mon - Sun)</h1>
+    <button id="themeToggle" class="absolute right-4 top-4 text-lg bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded">
+      🌙
+    </button>
+  </div>
+
+  <div id="weekContainer" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"></div>
+
+  <script>
+    const weekContainer = document.getElementById("weekContainer");
+    const themeToggle = document.getElementById("themeToggle");
+
+    // ====== Theme Handling ======
+    function setTheme(mode) {
+      const html = document.documentElement;
+      if (mode === 'dark') {
+        html.classList.add('dark');
+        themeToggle.textContent = '☀️';
+      } else {
+        html.classList.remove('dark');
+        themeToggle.textContent = '🌙';
+      }
+      localStorage.setItem('theme', mode);
+    }
+
+    function toggleTheme() {
+      const current = localStorage.getItem('theme') === 'dark' ? 'light' : 'dark';
+      setTheme(current);
+    }
+
+    // Init theme
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+    themeToggle.addEventListener('click', toggleTheme);
+
+    // ====== Task App Logic ======
+    function formatDate(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function renderWeek() {
+      weekContainer.innerHTML = "";
+
+      const today = new Date();
+      const startDay = new Date(today);
+      const currentDay = today.getDay();
+      const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+      startDay.setDate(today.getDate() + diffToMonday);
+
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(startDay);
+        dayDate.setDate(startDay.getDate() + i);
+        const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
+        const dateKey = formatDate(dayDate);
+        const dateLabel = dayDate.toLocaleDateString();
+
+        const tasks = loadTasks(dateKey);
+
+        const dayDiv = document.createElement("div");
+        dayDiv.className = "bg-white dark:bg-gray-800 rounded-xl shadow p-4";
+
+        dayDiv.innerHTML = `
+          <h2 class="text-lg font-semibold mb-2">${dayName}<br><span class="text-sm text-gray-500 dark:text-gray-400">${dateLabel}</span></h2>
+          <ul id="list-${dateKey}" class="mb-2 space-y-1"></ul>
+          <div class="flex gap-2">
+            <input id="input-${dateKey}" type="text" placeholder="Add task..." class="flex-1 border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+            <button onclick="addTask('${dateKey}')" class="bg-blue-500 text-white px-3 py-1 rounded">Add</button>
+          </div>
+        `;
+
+        weekContainer.appendChild(dayDiv);
+
+        const listElement = document.getElementById(`list-${dateKey}`);
+        tasks.forEach(task => renderTask(dateKey, task, listElement));
+      }
+
+      localStorage.setItem("lastRenderedDate", formatDate(new Date()));
+    }
+
+    function loadTasks(key) {
+      return JSON.parse(localStorage.getItem(key) || "[]");
+    }
+
+    function saveTasks(key, tasks) {
+      localStorage.setItem(key, JSON.stringify(tasks));
+    }
+
+    function renderTask(key, task, listElement) {
+      const li = document.createElement("li");
+      li.className = "flex items-center justify-between bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = task.done;
+      checkbox.className = "mr-2";
+      checkbox.onchange = () => toggleDone(key, task.text, checkbox.checked);
+
+      const span = document.createElement("span");
+      span.textContent = task.text;
+      span.className = task.done ? "line-through text-gray-500 dark:text-gray-400" : "";
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.innerHTML = "✕";
+      deleteBtn.className = "text-red-500 text-sm ml-2";
+      deleteBtn.onclick = () => removeTask(key, task.text, li);
+
+      const label = document.createElement("label");
+      label.className = "flex items-center flex-1";
+      label.appendChild(checkbox);
+      label.appendChild(span);
+
+      li.appendChild(label);
+      li.appendChild(deleteBtn);
+      listElement.appendChild(li);
+    }
+
+    function addTask(key) {
+      const input = document.getElementById(`input-${key}`);
+      const list = document.getElementById(`list-${key}`);
+      const taskText = input.value.trim();
+      if (taskText === "") return;
+
+      const tasks = loadTasks(key);
+      const newTask = { text: taskText, done: false };
+      tasks.push(newTask);
+      saveTasks(key, tasks);
+      renderTask(key, newTask, list);
+      input.value = "";
+    }
+
+    function removeTask(key, taskText, liElement) {
+      let tasks = loadTasks(key);
+      tasks = tasks.filter(task => task.text !== taskText);
+      saveTasks(key, tasks);
+      liElement.remove();
+    }
+
+    function toggleDone(key, taskText, isDone) {
+      const tasks = loadTasks(key);
+      const task = tasks.find(t => t.text === taskText);
+      if (task) {
+        task.done = isDone;
+        saveTasks(key, tasks);
+        const list = document.getElementById(`list-${key}`);
+        list.innerHTML = "";
+        tasks.forEach(task => renderTask(key, task, list));
+      }
+    }
+
+    const lastRenderedDate = localStorage.getItem("lastRenderedDate");
+    const todayDate = formatDate(new Date());
+
+    if (lastRenderedDate !== todayDate) {
+      renderWeek();
+    } else {
+      renderWeek();
+    }
+
+    setInterval(() => {
+      const newToday = formatDate(new Date());
+      if (newToday !== localStorage.getItem("lastRenderedDate")) {
+        location.reload();
+      }
+    }, 60 * 60 * 1000); // Every hour
+  </script>
+</body>
+</html>
