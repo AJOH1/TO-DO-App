@@ -1,96 +1,61 @@
+
 <!DOCTYPE html>
-<html lang="en" class="transition duration-300">
+<html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="Angelo" content="width=device-width, initial-scale=1.0" />
-  <title>Bekeeh To-Do App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily To-Do App</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // Enable Tailwind dark mode class support
-    tailwind.config = {
-      darkMode: 'class',
-    };
-  </script>
+  <style>
+    @keyframes pop {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .toast {
+      animation: pop 0.3s ease forwards;
+    }
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      opacity: 0;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 min-h-screen transition duration-300">
-  <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold text-center w-full">📅 Weekly To-Do (Mon - Sun)</h1>
-    <button id="themeToggle" class="absolute right-4 top-4 text-lg bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded">
-      🌙
-    </button>
+
+<body class="bg-gray-900 text-white p-4 min-h-screen">
+  <div class="text-center mb-4">
+    <h1 class="text-2xl font-bold">🗓 Welcome, <span id="usernameDisplay"></span>!</h1>
+    <p class="text-gray-400" id="tagline">KEEP TRACK OF EVERY ACTION</p>
+    <p class="text-sm text-gray-500" id="dateDisplay"></p>
   </div>
 
-  <div id="weekContainer" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"></div>
+  <div id="taskContainer" class="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow p-4"></div>
+
+  <div id="toast" class="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg hidden"></div>
+  <audio id="notifySound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
   <script>
-    const weekContainer = document.getElementById("weekContainer");
-    const themeToggle = document.getElementById("themeToggle");
+    const username = localStorage.getItem("username") || prompt("What's your name?");
+    if (!localStorage.getItem("username")) localStorage.setItem("username", username);
+    document.getElementById("usernameDisplay").textContent = username;
 
-    // ====== Theme Handling ======
-    function setTheme(mode) {
-      const html = document.documentElement;
-      if (mode === 'dark') {
-        html.classList.add('dark');
-        themeToggle.textContent = '☀️';
-      } else {
-        html.classList.remove('dark');
-        themeToggle.textContent = '🌙';
-      }
-      localStorage.setItem('theme', mode);
+    const notifySound = document.getElementById("notifySound");
+    const toast = document.getElementById("toast");
+    const dateDisplay = document.getElementById("dateDisplay");
+    const taskContainer = document.getElementById("taskContainer");
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.remove("hidden");
+      toast.classList.add("toast");
+      setTimeout(() => toast.classList.add("hidden"), 2000);
     }
 
-    function toggleTheme() {
-      const current = localStorage.getItem('theme') === 'dark' ? 'light' : 'dark';
-      setTheme(current);
-    }
-
-    // Init theme
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    setTheme(savedTheme);
-    themeToggle.addEventListener('click', toggleTheme);
-
-    // ====== Task App Logic ======
     function formatDate(date) {
       return date.toISOString().split('T')[0];
     }
 
-    function renderWeek() {
-      weekContainer.innerHTML = "";
-
-      const today = new Date();
-      const startDay = new Date(today);
-      const currentDay = today.getDay();
-      const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-      startDay.setDate(today.getDate() + diffToMonday);
-
-      for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(startDay);
-        dayDate.setDate(startDay.getDate() + i);
-        const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
-        const dateKey = formatDate(dayDate);
-        const dateLabel = dayDate.toLocaleDateString();
-
-        const tasks = loadTasks(dateKey);
-
-        const dayDiv = document.createElement("div");
-        dayDiv.className = "bg-white dark:bg-gray-800 rounded-xl shadow p-4";
-
-        dayDiv.innerHTML = `
-          <h2 class="text-lg font-semibold mb-2">${dayName}<br><span class="text-sm text-gray-500 dark:text-gray-400">${dateLabel}</span></h2>
-          <ul id="list-${dateKey}" class="mb-2 space-y-1"></ul>
-          <div class="flex gap-2">
-            <input id="input-${dateKey}" type="text" placeholder="Add task..." class="flex-1 border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-            <button onclick="addTask('${dateKey}')" class="bg-blue-500 text-white px-3 py-1 rounded">Add</button>
-          </div>
-        `;
-
-        weekContainer.appendChild(dayDiv);
-
-        const listElement = document.getElementById(`list-${dateKey}`);
-        tasks.forEach(task => renderTask(dateKey, task, listElement));
-      }
-
-      localStorage.setItem("lastRenderedDate", formatDate(new Date()));
+    function formatDateLabel(date) {
+      return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
     }
 
     function loadTasks(key) {
@@ -101,30 +66,92 @@
       localStorage.setItem(key, JSON.stringify(tasks));
     }
 
+    function updateTaskSection() {
+      taskContainer.innerHTML = "";
+      const now = new Date();
+      const dateKey = formatDate(now);
+      const dateLabel = formatDateLabel(now);
+      dateDisplay.textContent = `Today is ${dateLabel}`;
+
+      const tasks = loadTasks(dateKey);
+
+      const section = document.createElement("div");
+      section.innerHTML = `
+        <h2 class="text-lg font-semibold mb-2">Tasks for ${dateLabel}</h2>
+        <ul id="list-${dateKey}" class="mb-2 space-y-1"></ul>
+        <div class="flex flex-col sm:flex-row gap-2 mt-2">
+          <input id="input-${dateKey}" type="text" placeholder="Add task..."
+            class="flex-1 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1 w-full" />
+          <input id="time-${dateKey}" type="time"
+            class="w-full sm:w-28 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1" placeholder="ADD TIME" />
+          <div class="relative">
+            <label class="flex items-center">
+              <input type="checkbox" id="repeat-${dateKey}" class="mr-1" /> Repeat
+            </label>
+            <div id="dayDropdown-${dateKey}" class="absolute mt-1 bg-gray-700 text-white rounded shadow p-2 hidden z-10">
+              ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => 
+                `<label class="inline-flex items-center mr-4 mb-1 text-sm"><input type="checkbox" value="${i}" class="repeat-day-checkbox mr-1" /> ${day}</label>`
+              ).join('')}
+            </div>
+          </div>
+          <button onclick="addTask('${dateKey}')"
+            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded w-full sm:w-auto">Add</button>
+        </div>
+      `;
+      taskContainer.appendChild(section);
+
+      const repeatCheckbox = document.getElementById(`repeat-${dateKey}`);
+      const dayDropdown = document.getElementById(`dayDropdown-${dateKey}`);
+      repeatCheckbox.addEventListener("change", () => {
+        dayDropdown.classList.toggle("hidden", !repeatCheckbox.checked);
+      });
+
+      const listElement = document.getElementById(`list-${dateKey}`);
+      tasks.forEach(task => renderTask(dateKey, task, listElement));
+    }
+
     function renderTask(key, task, listElement) {
       const li = document.createElement("li");
-      li.className = "flex items-center justify-between bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = task.done;
-      checkbox.className = "mr-2";
-      checkbox.onchange = () => toggleDone(key, task.text, checkbox.checked);
+      li.className = "flex items-center justify-between bg-gray-700 px-2 py-1 rounded";
 
       const span = document.createElement("span");
-      span.textContent = task.text;
-      span.className = task.done ? "line-through text-gray-500 dark:text-gray-400" : "";
+      span.textContent = task.text + (task.repeat ? " 🔁" : "");
+      span.className = task.done ? "line-through text-gray-400" : "";
 
       const deleteBtn = document.createElement("button");
       deleteBtn.innerHTML = "✕";
-      deleteBtn.className = "text-red-500 text-sm ml-2";
-      deleteBtn.onclick = () => removeTask(key, task.text, li);
+      deleteBtn.className = "text-red-400 text-sm ml-2";
+      deleteBtn.onclick = () => {
+        removeTask(key, task.text, li);
+        showToast("Task deleted");
+        notifySound.play();
+      };
 
       const label = document.createElement("label");
       label.className = "flex items-center flex-1";
-      label.appendChild(checkbox);
-      label.appendChild(span);
 
+      const today = new Date();
+      const currentDay = today.getDay();
+      const isRepeatDay = Array.isArray(task.repeat) && task.repeat.includes(currentDay);
+
+      if (!task.repeat || isRepeatDay) {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.done;
+        checkbox.className = "mr-2";
+        checkbox.onchange = () => {
+          toggleDone(key, task.text, checkbox.checked);
+          showToast("Task " + (checkbox.checked ? "checked" : "unchecked"));
+          notifySound.play();
+        };
+        label.appendChild(checkbox);
+      } else {
+        const spacer = document.createElement("span");
+        spacer.className = "mr-2 w-4";
+        label.appendChild(spacer);
+      }
+
+      label.appendChild(span);
       li.appendChild(label);
       li.appendChild(deleteBtn);
       listElement.appendChild(li);
@@ -132,16 +159,46 @@
 
     function addTask(key) {
       const input = document.getElementById(`input-${key}`);
-      const list = document.getElementById(`list-${key}`);
-      const taskText = input.value.trim();
-      if (taskText === "") return;
+      const timeInput = document.getElementById(`time-${key}`);
+      const repeatInput = document.getElementById(`repeat-${key}`);
+      const repeatCheckboxes = document.querySelectorAll(`#dayDropdown-${key} .repeat-day-checkbox`);
 
-      const tasks = loadTasks(key);
-      const newTask = { text: taskText, done: false };
-      tasks.push(newTask);
-      saveTasks(key, tasks);
-      renderTask(key, newTask, list);
+      const taskText = input.value.trim();
+      const taskTime = timeInput.value;
+      const repeat = repeatInput.checked;
+      const selectedDays = Array.from(repeatCheckboxes).filter(c => c.checked).map(c => parseInt(c.value));
+
+      if (!taskText && !taskTime) return showToast(`${username}, please add a task and time.`);
+      if (!taskText) return showToast(`${username}, task is required.`);
+      if (!taskTime) return showToast(`${username}, please set a time.`);
+
+      const baseTask = {
+        text: taskText,
+        time: taskTime,
+        done: false,
+        repeat: repeat ? selectedDays : false
+      };
+
+      const today = new Date();
+      const todayKey = formatDate(today);
+      const todayTasks = loadTasks(todayKey);
+      todayTasks.push({ ...baseTask });
+      saveTasks(todayKey, todayTasks);
+      renderTask(todayKey, baseTask, document.getElementById(`list-${key}`));
+
       input.value = "";
+      timeInput.value = "";
+      repeatInput.checked = false;
+      document.getElementById(`dayDropdown-${key}`).classList.add("hidden");
+      repeatCheckboxes.forEach(cb => cb.checked = false);
+
+      if (repeat && selectedDays.length > 0) {
+        showToast("✅ SUCCESSFULLY SET TO REPEAT MODE");
+      } else {
+        showToast("Task added");
+      }
+
+      notifySound.play();
     }
 
     function removeTask(key, taskText, liElement) {
@@ -157,27 +214,39 @@
       if (task) {
         task.done = isDone;
         saveTasks(key, tasks);
-        const list = document.getElementById(`list-${key}`);
-        list.innerHTML = "";
-        tasks.forEach(task => renderTask(key, task, list));
       }
-    }
-
-    const lastRenderedDate = localStorage.getItem("lastRenderedDate");
-    const todayDate = formatDate(new Date());
-
-    if (lastRenderedDate !== todayDate) {
-      renderWeek();
-    } else {
-      renderWeek();
     }
 
     setInterval(() => {
-      const newToday = formatDate(new Date());
-      if (newToday !== localStorage.getItem("lastRenderedDate")) {
-        location.reload();
-      }
-    }, 60 * 60 * 1000); // Every hour
+      const now = new Date();
+      const dateKey = formatDate(now);
+      const tasks = loadTasks(dateKey);
+      const currentTime = now.toTimeString().slice(0, 5);
+      tasks.forEach(task => {
+        if (!task.notified && task.time === currentTime) {
+          showToast(`⏰ ${task.text} is due now!`);
+          notifySound.play();
+          task.notified = true;
+          saveTasks(dateKey, tasks);
+        }
+      });
+    }, 60000);
+
+    const taglines = [
+      "KEEP TRACK OF EVERY ACTION",
+      "STAY FOCUSED, STAY PRODUCTIVE",
+      "MAKE EVERY TASK COUNT",
+      "ORGANIZE YOUR DAY, YOUR WAY",
+      "SMALL STEPS, BIG WINS"
+    ];
+    let tagIndex = 0;
+    setInterval(() => {
+      tagIndex = (tagIndex + 1) % taglines.length;
+      document.getElementById("tagline").textContent = taglines[tagIndex];
+    }, 10000);
+
+    updateTaskSection();
   </script>
 </body>
+
 </html>
