@@ -1,251 +1,139 @@
-
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily To-Do App</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @keyframes pop {
-      0% { transform: scale(0.9); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .toast {
-      animation: pop 0.3s ease forwards;
-    }
-    input[type="time"]::-webkit-calendar-picker-indicator {
-      opacity: 0;
-    }
-  </style>
+  <title>Smart To-Do App</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 
-<body class="bg-gray-900 text-white p-4 min-h-screen">
-  <div class="text-center mb-4">
-    <h1 class="text-2xl font-bold">🗓 Welcome, <span id="usernameDisplay"></span>!</h1>
-    <p class="text-gray-400" id="tagline">KEEP TRACK OF EVERY ACTION</p>
-    <p class="text-sm text-gray-500" id="dateDisplay"></p>
+<body class="bg-gray-900 text-white min-h-screen p-4">
+  <div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-2">Hello, <span id="username" class="text-blue-400"></span> 👋</h1>
+    <p id="tagline" class="text-sm text-gray-300 mb-6"></p>
+    <h2 id="today-date" class="text-lg font-semibold mb-2"></h2>
+    <div id="task-container" class="mb-4"></div>
+    <div class="flex flex-col sm:flex-row gap-2 mt-2">
+      <input id="task-input" type="text" placeholder="Add task..." class="flex-1 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1 w-full" />
+      <input id="task-time" type="time" class="w-full sm:w-28 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1" />
+      <button id="add-button" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded w-full sm:w-auto">Add</button>
+    </div>
   </div>
 
-  <div id="taskContainer" class="max-w-2xl mx-auto bg-gray-800 rounded-xl shadow p-4"></div>
-
-  <div id="toast" class="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg hidden"></div>
-  <audio id="notifySound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
-
   <script>
-    const username = localStorage.getItem("username") || prompt("What's your name?");
-    if (!localStorage.getItem("username")) localStorage.setItem("username", username);
-    document.getElementById("usernameDisplay").textContent = username;
+    const username = localStorage.getItem("username") || prompt("Welcome! What is your name?");
+    localStorage.setItem("username", username);
+    document.getElementById("username").textContent = username;
 
-    const notifySound = document.getElementById("notifySound");
-    const toast = document.getElementById("toast");
-    const dateDisplay = document.getElementById("dateDisplay");
-    const taskContainer = document.getElementById("taskContainer");
+    const taglines = [
+      `Stay on top of your day, ${username}!`,
+      `Keep track of every action, ${username}!`,
+      `${username}, conquer your tasks!`,
+      `Focus and finish strong, ${username}!`,
+      `${username}, make every task count!`
+    ];
 
-    function showToast(message) {
-      toast.textContent = message;
-      toast.classList.remove("hidden");
-      toast.classList.add("toast");
-      setTimeout(() => toast.classList.add("hidden"), 2000);
-    }
+    let currentTagline = 0;
+    document.getElementById("tagline").textContent = taglines[currentTagline];
+    setInterval(() => {
+      currentTagline = (currentTagline + 1) % taglines.length;
+      document.getElementById("tagline").textContent = taglines[currentTagline];
+    }, 10000);
 
-    function formatDate(date) {
-      return date.toISOString().split('T')[0];
-    }
+    const getCurrentDateKey = () => new Date().toISOString().split("T")[0];
 
-    function formatDateLabel(date) {
-      return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
-    }
+    const tasks = JSON.parse(localStorage.getItem("tasks")) || {};
 
-    function loadTasks(key) {
-      return JSON.parse(localStorage.getItem(key) || "[]");
-    }
+    const saveTasks = () => {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    };
 
-    function saveTasks(key, tasks) {
-      localStorage.setItem(key, JSON.stringify(tasks));
-    }
+    const renderTasks = () => {
+      const container = document.getElementById("task-container");
+      container.innerHTML = "";
+      const dateKey = getCurrentDateKey();
+      const dayTasks = tasks[dateKey] || [];
 
-    function updateTaskSection() {
-      taskContainer.innerHTML = "";
-      const now = new Date();
-      const dateKey = formatDate(now);
-      const dateLabel = formatDateLabel(now);
-      dateDisplay.textContent = `Today is ${dateLabel}`;
+      dayTasks.forEach((task, index) => {
+        const div = document.createElement("div");
+        div.className = "flex justify-between items-center bg-gray-800 text-white rounded px-3 py-2 mb-2";
 
-      const tasks = loadTasks(dateKey);
+        const text = document.createElement("span");
+        text.textContent = task.text;
+        div.appendChild(text);
 
-      const section = document.createElement("div");
-      section.innerHTML = `
-        <h2 class="text-lg font-semibold mb-2">Tasks for ${dateLabel}</h2>
-        <ul id="list-${dateKey}" class="mb-2 space-y-1"></ul>
-        <div class="flex flex-col sm:flex-row gap-2 mt-2">
-          <input id="input-${dateKey}" type="text" placeholder="Add task..."
-            class="flex-1 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1 w-full" />
-          <input id="time-${dateKey}" type="time"
-            class="w-full sm:w-28 border border-gray-600 bg-gray-900 text-white rounded px-2 py-1" placeholder="ADD TIME" />
-          <div class="relative">
-            <label class="flex items-center">
-              <input type="checkbox" id="repeat-${dateKey}" class="mr-1" /> Repeat
-            </label>
-            <div id="dayDropdown-${dateKey}" class="absolute mt-1 bg-gray-700 text-white rounded shadow p-2 hidden z-10">
-              ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day, i) => 
-                `<label class="inline-flex items-center mr-4 mb-1 text-sm"><input type="checkbox" value="${i}" class="repeat-day-checkbox mr-1" /> ${day}</label>`
-              ).join('')}
-            </div>
-          </div>
-          <button onclick="addTask('${dateKey}')"
-            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded w-full sm:w-auto">Add</button>
-        </div>
-      `;
-      taskContainer.appendChild(section);
+        const right = document.createElement("div");
 
-      const repeatCheckbox = document.getElementById(`repeat-${dateKey}`);
-      const dayDropdown = document.getElementById(`dayDropdown-${dateKey}`);
-      repeatCheckbox.addEventListener("change", () => {
-        dayDropdown.classList.toggle("hidden", !repeatCheckbox.checked);
-      });
-
-      const listElement = document.getElementById(`list-${dateKey}`);
-      tasks.forEach(task => renderTask(dateKey, task, listElement));
-    }
-
-    function renderTask(key, task, listElement) {
-      const li = document.createElement("li");
-      li.className = "flex items-center justify-between bg-gray-700 px-2 py-1 rounded";
-
-      const span = document.createElement("span");
-      span.textContent = task.text + (task.repeat ? " 🔁" : "");
-      span.className = task.done ? "line-through text-gray-400" : "";
-
-      const deleteBtn = document.createElement("button");
-      deleteBtn.innerHTML = "✕";
-      deleteBtn.className = "text-red-400 text-sm ml-2";
-      deleteBtn.onclick = () => {
-        removeTask(key, task.text, li);
-        showToast("Task deleted");
-        notifySound.play();
-      };
-
-      const label = document.createElement("label");
-      label.className = "flex items-center flex-1";
-
-      const today = new Date();
-      const currentDay = today.getDay();
-      const isRepeatDay = Array.isArray(task.repeat) && task.repeat.includes(currentDay);
-
-      if (!task.repeat || isRepeatDay) {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = task.done;
         checkbox.className = "mr-2";
-        checkbox.onchange = () => {
-          toggleDone(key, task.text, checkbox.checked);
-          showToast("Task " + (checkbox.checked ? "checked" : "unchecked"));
-          notifySound.play();
-        };
-        label.appendChild(checkbox);
-      } else {
-        const spacer = document.createElement("span");
-        spacer.className = "mr-2 w-4";
-        label.appendChild(spacer);
+        checkbox.addEventListener("change", () => {
+          task.done = checkbox.checked;
+          saveTasks();
+          Swal.fire("Nice one!", `${username}, Task marked as ${task.done ? "done" : "undone"}.`, "success");
+        });
+        right.appendChild(checkbox);
+
+        div.appendChild(right);
+        container.appendChild(div);
+      });
+    };
+
+    const addTask = () => {
+      const input = document.getElementById("task-input");
+      const timeInput = document.getElementById("task-time");
+      const dateKey = getCurrentDateKey();
+
+      if (!input.value && !timeInput.value) {
+        Swal.fire("Oops!", `${username}, please add a task and time.`, "warning");
+        return;
+      } else if (!input.value) {
+        Swal.fire("Missing Task", `${username}, please enter a task.`, "info");
+        return;
+      } else if (!timeInput.value) {
+        Swal.fire("Missing Time", `${username}, please set a time for the task.`, "info");
+        return;
       }
 
-      label.appendChild(span);
-      li.appendChild(label);
-      li.appendChild(deleteBtn);
-      listElement.appendChild(li);
-    }
-
-    function addTask(key) {
-      const input = document.getElementById(`input-${key}`);
-      const timeInput = document.getElementById(`time-${key}`);
-      const repeatInput = document.getElementById(`repeat-${key}`);
-      const repeatCheckboxes = document.querySelectorAll(`#dayDropdown-${key} .repeat-day-checkbox`);
-
-      const taskText = input.value.trim();
-      const taskTime = timeInput.value;
-      const repeat = repeatInput.checked;
-      const selectedDays = Array.from(repeatCheckboxes).filter(c => c.checked).map(c => parseInt(c.value));
-
-      if (!taskText && !taskTime) return showToast(`${username}, please add a task and time.`);
-      if (!taskText) return showToast(`${username}, task is required.`);
-      if (!taskTime) return showToast(`${username}, please set a time.`);
-
-      const baseTask = {
-        text: taskText,
-        time: taskTime,
-        done: false,
-        repeat: repeat ? selectedDays : false
+      const newTask = {
+        text: `${input.value} ⏰ ${timeInput.value}`,
+        done: false
       };
 
-      const today = new Date();
-      const todayKey = formatDate(today);
-      const todayTasks = loadTasks(todayKey);
-      todayTasks.push({ ...baseTask });
-      saveTasks(todayKey, todayTasks);
-      renderTask(todayKey, baseTask, document.getElementById(`list-${key}`));
-
+      if (!tasks[dateKey]) tasks[dateKey] = [];
+      tasks[dateKey].push(newTask);
+      saveTasks();
       input.value = "";
       timeInput.value = "";
-      repeatInput.checked = false;
-      document.getElementById(`dayDropdown-${key}`).classList.add("hidden");
-      repeatCheckboxes.forEach(cb => cb.checked = false);
+      renderTasks();
+    };
 
-      if (repeat && selectedDays.length > 0) {
-        showToast("✅ SUCCESSFULLY SET TO REPEAT MODE");
-      } else {
-        showToast("Task added");
-      }
-
-      notifySound.play();
-    }
-
-    function removeTask(key, taskText, liElement) {
-      let tasks = loadTasks(key);
-      tasks = tasks.filter(task => task.text !== taskText);
-      saveTasks(key, tasks);
-      liElement.remove();
-    }
-
-    function toggleDone(key, taskText, isDone) {
-      const tasks = loadTasks(key);
-      const task = tasks.find(t => t.text === taskText);
-      if (task) {
-        task.done = isDone;
-        saveTasks(key, tasks);
-      }
-    }
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("today-date").textContent = new Date().toDateString();
+      renderTasks();
+      document.getElementById("add-button").addEventListener("click", addTask);
+    });
 
     setInterval(() => {
+      const dateKey = getCurrentDateKey();
       const now = new Date();
-      const dateKey = formatDate(now);
-      const tasks = loadTasks(dateKey);
-      const currentTime = now.toTimeString().slice(0, 5);
-      tasks.forEach(task => {
-        if (!task.notified && task.time === currentTime) {
-          showToast(`⏰ ${task.text} is due now!`);
-          notifySound.play();
-          task.notified = true;
-          saveTasks(dateKey, tasks);
+      const timeNow = now.toTimeString().slice(0, 5);
+      const todayTasks = tasks[dateKey] || [];
+
+      todayTasks.forEach(task => {
+        if (task.timeNotified) return;
+        if (task.text.includes(timeNow)) {
+          task.timeNotified = true;
+          saveTasks();
+          const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+          audio.play();
+          Swal.fire("⏰ Task Time!", `${username}, it's time for: ${task.text}`, "info");
         }
       });
     }, 60000);
-
-    const taglines = [
-      "KEEP TRACK OF EVERY ACTION",
-      "STAY FOCUSED, STAY PRODUCTIVE",
-      "MAKE EVERY TASK COUNT",
-      "ORGANIZE YOUR DAY, YOUR WAY",
-      "SMALL STEPS, BIG WINS"
-    ];
-    let tagIndex = 0;
-    setInterval(() => {
-      tagIndex = (tagIndex + 1) % taglines.length;
-      document.getElementById("tagline").textContent = taglines[tagIndex];
-    }, 10000);
-
-    updateTaskSection();
   </script>
 </body>
 
